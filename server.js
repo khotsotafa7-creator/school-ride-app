@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { messaging } = require("./firebase");
@@ -16,7 +18,6 @@ app.get("/drivers", async (req, res) => {
   res.json(drivers);
 });
 
-
 app.post("/notify", async (req, res) => {
   const message = {
     notification: {
@@ -25,15 +26,15 @@ app.post("/notify", async (req, res) => {
     },
     topic: "parents"
   };
-
   await messaging.send(message);
-
-  res.json({
-    message: "Notification sent"
-  });
+  res.json({ message: "Notification sent" });
 });
-
-
+app.post("/drivers", async (req, res) => {
+  const driver = await prisma.driver.create({
+    data: req.body
+  });
+  res.json(driver);
+});
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
