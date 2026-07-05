@@ -1,18 +1,430 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// prisma/schema.prisma
+// SchoolRide V1 — FINAL LOCKED SCHEMA
+// PostgreSQL + Prisma 6
+// Version 1.0
 
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")	
+  url      = env("DATABASE_URL")
 }
-model Driver {
-  id          Int    @id @default(autoincrement())
-  fullName    String
-  phoneNumber String
-  vehicleType String?
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+enum UserRole {
+  PARENT
+  DRIVER
+  ADMIN
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  PICKUP
+  DROPOFF
+  PAYMENT
+  BACKUP_DRIVER
+  ROUTE_CHANGED
+  MESSAGE
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+enum RouteStatus {
+  ACTIVE
+  INACTIVE
+  FULL
+}
+
+//////////////////////////////////////////////////////
+// USER
+//////////////////////////////////////////////////////
+
+model User {
+  id             String    @id @default(cuid())
+  firebaseUid    String    @unique
+  fullName       String
+  email          String    @unique
+  phoneNumber    String?
+  role           UserRole
+  isActive       Boolean   @default(true)
+  profilePicture String?
+  lastLoginAt    DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  parentProfile    ParentProfile?
+  driverProfile    DriverProfile?
+  sentMessages     Message[]      @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
+  notifications    Notification[]
+  paymentsMade     Payment[]      @relation("PaidByUser")
+  auditLogs        AuditLog[]
+
+  @@index([firebaseUid])
+  @@index([email])
+  @@index([role])
+}
+
+//////////////////////////////////////////////////////
+// PARENT PROFILE
+//////////////////////////////////////////////////////
+
+model ParentProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address               String?
+  suburb                String?
+  city                  String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  preferredLanguage     String?
+  preferredZoneId       String?
+  preferredZone         Zone?     @relation(fields: [preferredZoneId], references: [id], onDelete: SetNull)
+  deletedAt             DateTime?
+
+  children        Child[]
+  subscriptions   Subscription[]
+  ratingsGiven    DriverRating[]
+
+  @@index([userId])
+  @@index([preferredZoneId])
+}
+
+//////////////////////////////////////////////////////
+// DRIVER PROFILE
+//////////////////////////////////////////////////////
+
+model DriverProfile {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driversLicenseNo    String?
+  pdpNo               String?
+  vehicleRegistration String?
+  vehicleType         String?
+  vehicleCapacity     Int?
+  averageRating       Float     @default(5)
+  totalRatings        Int       @default(0)
+  isVerified          Boolean   @default(false)
+  isOnline            Boolean   @default(false)
+  currentLatitude     Float?
+  currentLongitude    Float?
+  currentRouteId      String?
+  currentRoute        Route?    @relation("DriverCurrentRoute", fields: [currentRouteId], references: [id], onDelete: SetNull)
+  deletedAt           DateTime?
+
+  assignments     RouteAssignment[]
+  ratingsReceived DriverRating[]
+
+  @@index([userId])
+  @@index([currentRouteId])
+}
+
+//////////////////////////////////////////////////////
+// ZONE
+//////////////////////////////////////////////////////
+
+model Zone {
+  id         String   @id @default(cuid())
+  zoneName   String
+  city       String
+  province   String
+  maxDrivers Int      @default(10)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  routes             Route[]
+  preferredByParents ParentProfile[]
+
+  @@unique([zoneName, city, province])
+  @@index([city])
+  @@index([province])
+}
+
+//////////////////////////////////////////////////////
+// ROUTE
+//////////////////////////////////////////////////////
+
+model Route {
+  id                String      @id @default(cuid())
+  zoneId            String
+  zone              Zone        @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  routeName         String
+  estimatedDistance Float?
+  estimatedDuration Int?
+  monthlyPrice      Decimal     @db.Decimal(10, 2)
+  currentPassengers Int         @default(0)
+  maxPassengers     Int         @default(14)
+  pickupStartTime   DateTime?
+  pickupEndTime     DateTime?
+  dropoffTime       DateTime?
+  status            RouteStatus @default(ACTIVE)
+  isActive          Boolean     @default(true)
+  deletedAt         DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  assignments        RouteAssignment[]
+  subscriptions      Subscription[]
+  messages           Message[]
+  notifications      Notification[]  @relation("RouteNotifications")
+  driversCurrentlyOn DriverProfile[] @relation("DriverCurrentRoute")
+  ratings            DriverRating[]
+
+  @@unique([zoneId, routeName])
+  @@index([zoneId])
+  @@index([status])
+  @@index([isActive])
+}
+
+//////////////////////////////////////////////////////
+// ROUTE ASSIGNMENT
+//////////////////////////////////////////////////////
+
+model RouteAssignment {
+  id        String        @id @default(cuid())
+  routeId   String
+  route     Route         @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  driverId  String
+  driver    DriverProfile @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  isPrimary Boolean       @default(true)
+  startDate DateTime      @default(now())
+  endDate   DateTime?
+  reason    String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([routeId])
+  @@index([driverId])
+  @@index([isPrimary])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+//////////////////////////////////////////////////////
+// SCHOOL
+//////////////////////////////////////////////////////
+
+model School {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  suburb        String
+  city          String
+  province      String?
+  latitude      Float
+  longitude     Float
+  contactNumber String?
+  email         String?
+  principalName String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  children Child[]
+
+  @@unique([name, address])
+  @@index([city])
+  @@index([isActive])
+}
+
+//////////////////////////////////////////////////////
+// CHILD
+//////////////////////////////////////////////////////
+
+model Child {
+  id                String        @id @default(cuid())
+  parentProfileId   String
+  parent            ParentProfile @relation(fields: [parentProfileId], references: [id], onDelete: Restrict)
+  schoolId          String
+  school            School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  fullName          String
+  grade             String
+  dateOfBirth       DateTime?
+  gender            String?
+  pickupAddress     String?
+  dropoffAddress    String?
+  allergies         String?
+  medicalConditions String?
+  emergencyNotes    String?
+  profilePhoto      String?
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  notifications Notification[] @relation("ChildNotifications")
+
+  @@index([parentProfileId])
+  @@index([schoolId])
+  @@index([isActive])
+}
+
+//////////////////////////////////////////////////////
+// SUBSCRIPTION
+//////////////////////////////////////////////////////
+
+model Subscription {
+  id              String        @id @default(cuid())
+  parentProfileId String
+  parent          ParentProfile @relation(fields: [parentProfileId], references: [id], onDelete: Restrict)
+  routeId         String
+  route           Route         @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  monthlyFee      Decimal       @db.Decimal(10, 2)
+  commission      Decimal       @db.Decimal(10, 2)
+  driverShare     Decimal       @db.Decimal(10, 2)
+  paymentStatus   PaymentStatus @default(PENDING)
+  nextPaymentDate DateTime
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  payments Payment[]
+
+  @@index([parentProfileId])
+  @@index([routeId])
+  @@index([paymentStatus])
+}
+
+//////////////////////////////////////////////////////
+// PAYMENT
+//////////////////////////////////////////////////////
+
+model Payment {
+  id                   String        @id @default(cuid())
+  subscriptionId       String
+  subscription         Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paidById             String?
+  paidBy               User?         @relation("PaidByUser", fields: [paidById], references: [id], onDelete: SetNull)
+  amount               Decimal       @db.Decimal(10, 2)
+  commission           Decimal       @db.Decimal(10, 2)
+  driverAmount         Decimal       @db.Decimal(10, 2)
+  status               PaymentStatus @default(PENDING)
+  paymentMethod        String?
+  transactionReference String?
+  paymentGateway       String?
+  paidAt               DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([subscriptionId])
+  @@index([paidById])
+  @@index([status])
+}
+
+//////////////////////////////////////////////////////
+// DRIVER RATING
+//////////////////////////////////////////////////////
+
+model DriverRating {
+  id       String        @id @default(cuid())
+  driverId String
+  driver   DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  parentId String
+  parent   ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  routeId  String?
+  route    Route?        @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  rating   Int
+  comment  String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([driverId, parentId, routeId])
+  @@index([driverId])
+  @@index([parentId])
+  @@index([routeId])
+}
+
+//////////////////////////////////////////////////////
+// MESSAGE
+//////////////////////////////////////////////////////
+
+model Message {
+  id          String      @id @default(cuid())
+  senderId    String
+  sender      User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Restrict)
+  receiverId  String
+  receiver    User        @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Restrict)
+  routeId     String?
+  route       Route?      @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  message     String
+  messageType MessageType @default(TEXT)
+  isRead      Boolean     @default(false)
+  readAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([routeId])
+  @@index([isRead])
+}
+
+//////////////////////////////////////////////////////
+// NOTIFICATION
+//////////////////////////////////////////////////////
+
+model Notification {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedRouteId   String?
+  relatedRoute     Route?           @relation("RouteNotifications", fields: [relatedRouteId], references: [id], onDelete: SetNull)
+  relatedChildId   String?
+  relatedChild     Child?           @relation("ChildNotifications", fields: [relatedChildId], references: [id], onDelete: SetNull)
+  title            String
+  body             String
+  notificationType NotificationType
+  isRead           Boolean          @default(false)
+  readAt           DateTime?
+  sentAt           DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([relatedRouteId])
+  @@index([relatedChildId])
+  @@index([notificationType])
+  @@index([isRead])
+}
+
+//////////////////////////////////////////////////////
+// AUDIT LOG
+//////////////////////////////////////////////////////
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  action    String
+  tableName String
+  recordId  String
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tableName])
+  @@index([recordId])
+  @@index([createdAt])
 }
