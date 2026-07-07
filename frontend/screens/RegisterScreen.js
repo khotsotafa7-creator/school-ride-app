@@ -20,7 +20,8 @@ export default function RegisterScreen({ navigation }) {
   const [loading,  setLoading]  = useState(false);
 
   const handleRegister = async () => {
-    if (!fullName||!email||!phone||!password||!confirm) {
+    // Validate fields
+    if (!fullName || !email || !phone || !password || !confirm) {
       Alert.alert('Missing Details', 'Please fill in all fields.');
       return;
     }
@@ -32,28 +33,43 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert('Weak Password', 'Minimum 6 characters.');
       return;
     }
+
     setLoading(true);
     try {
+      // Step 1 — Create account in Firebase
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUid = cred.user.uid;
       const token = await cred.user.getIdToken();
 
+      // Step 2 — Save user to SchoolRide database
       const response = await fetch(`${API}/api/auth/register`, {
-        method: 'POST',
+        method:  'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type':  'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          firebaseUid, fullName, email,
-          phoneNumber: phone, role,
+          firebaseUid,
+          fullName,
+          email,
+          phoneNumber: phone,
+          role,
         }),
       });
+
+      const data = await response.json();
+
       if (response.ok) {
-        Alert.alert('Welcome!', 'Your account has been created.', [
-          { text: 'Continue', onPress: () => navigation.replace('Home') }
-        ]);
+        // Step 3 — Navigate based on role
+        if (role === 'parent') {
+          navigation.replace('Home');
+        } else if (role === 'driver') {
+          navigation.replace('DriverHome');
+        }
+      } else {
+        Alert.alert('Registration Failed', data.error || 'Please try again.');
       }
+
     } catch (error) {
       let msg = 'Registration failed. Please try again.';
       if (error.code === 'auth/email-already-in-use')
@@ -67,26 +83,28 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{flex:1}}
+    <KeyboardAvoidingView style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={styles.container}
         contentContainerStyle={styles.content}>
+
         <Text style={styles.logo}>SchoolRide</Text>
         <Text style={styles.tagline}>Create your account</Text>
 
+        {/* Role selector */}
         <Text style={styles.label}>I am a:</Text>
         <View style={styles.roleRow}>
           <TouchableOpacity
-            style={[styles.roleBtn, role==='parent' && styles.roleBtnActive]}
+            style={[styles.roleBtn, role === 'parent' && styles.roleBtnActive]}
             onPress={() => setRole('parent')}>
             <Text style={[styles.roleText,
-              role==='parent' && styles.roleTextActive]}>Parent</Text>
+              role === 'parent' && styles.roleTextActive]}>👨‍👩‍👧 Parent</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.roleBtn, role==='driver' && styles.roleBtnActive]}
+            style={[styles.roleBtn, role === 'driver' && styles.roleBtnActive]}
             onPress={() => setRole('driver')}>
             <Text style={[styles.roleText,
-              role==='driver' && styles.roleTextActive]}>Driver</Text>
+              role === 'driver' && styles.roleTextActive]}>🚐 Driver</Text>
           </TouchableOpacity>
         </View>
 
@@ -132,32 +150,33 @@ export default function RegisterScreen({ navigation }) {
             <Text style={styles.loginLink}>Sign In</Text>
           </Text>
         </TouchableOpacity>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container:      { flex:1, backgroundColor:'#0a1628' },
-  content:        { padding:24, paddingBottom:40 },
-  logo:           { fontSize:32, fontWeight:'bold', color:'#F5A623', marginTop:20 },
-  tagline:        { fontSize:14, color:'#94a3b8', marginBottom:24 },
-  label:          { fontSize:13, color:'#94a3b8', marginBottom:6, fontWeight:'600' },
-  input:          { backgroundColor:'#0d2137', color:'white', padding:14,
-                    borderRadius:10, marginBottom:16, fontSize:15,
-                    borderWidth:1, borderColor:'#1e3a5f' },
-  roleRow:        { flexDirection:'row', marginBottom:20, gap:12 },
-  roleBtn:        { flex:1, padding:12, borderRadius:10, alignItems:'center',
-                    backgroundColor:'#0d2137', borderWidth:1.5,
-                    borderColor:'#1e3a5f' },
-  roleBtnActive:  { borderColor:'#27ae60', backgroundColor:'#0d3320' },
-  roleText:       { color:'#94a3b8', fontWeight:'bold' },
-  roleTextActive: { color:'#27ae60' },
-  btn:            { backgroundColor:'#27ae60', padding:16, borderRadius:12,
-                    alignItems:'center', marginBottom:20, marginTop:8 },
-  btnDisabled:    { backgroundColor:'#1a6b3a' },
-  btnText:        { color:'white', fontSize:17, fontWeight:'bold' },
-  loginContainer: { alignItems:'center' },
-  loginText:      { color:'#94a3b8', fontSize:13 },
-  loginLink:      { color:'#F5A623', fontWeight:'bold' },
+  container:      { flex: 1, backgroundColor: '#0a1628' },
+  content:        { padding: 24, paddingBottom: 40 },
+  logo:           { fontSize: 32, fontWeight: 'bold', color: '#F5A623', marginTop: 20 },
+  tagline:        { fontSize: 14, color: '#94a3b8', marginBottom: 24 },
+  label:          { fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: '600' },
+  input:          { backgroundColor: '#0d2137', color: 'white', padding: 14,
+                    borderRadius: 10, marginBottom: 16, fontSize: 15,
+                    borderWidth: 1, borderColor: '#1e3a5f' },
+  roleRow:        { flexDirection: 'row', marginBottom: 20, gap: 12 },
+  roleBtn:        { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center',
+                    backgroundColor: '#0d2137', borderWidth: 1.5,
+                    borderColor: '#1e3a5f' },
+  roleBtnActive:  { borderColor: '#27ae60', backgroundColor: '#0d3320' },
+  roleText:       { color: '#94a3b8', fontWeight: 'bold' },
+  roleTextActive: { color: '#27ae60' },
+  btn:            { backgroundColor: '#27ae60', padding: 16, borderRadius: 12,
+                    alignItems: 'center', marginBottom: 20, marginTop: 8 },
+  btnDisabled:    { backgroundColor: '#1a6b3a' },
+  btnText:        { color: 'white', fontSize: 17, fontWeight: 'bold' },
+  loginContainer: { alignItems: 'center' },
+  loginText:      { color: '#94a3b8', fontSize: 13 },
+  loginLink:      { color: '#F5A623', fontWeight: 'bold' },
 });

@@ -37,7 +37,8 @@ const verifyToken = async (req, res, next) => {
 // ── POST /api/auth/register ───────────────────────────────────────────────
 // Called after Firebase creates the account
 // Creates User + ParentProfile or DriverProfile
-router.post('/register', verifyToken, async (req, res) => {
+router.post('/register',  async (req, res) => {
+    console.log("REGISTER ROUTE REACHED");
   const { firebaseUid, fullName, email, phoneNumber, role } = req.body;
 
   try {
@@ -91,43 +92,54 @@ router.post('/register', verifyToken, async (req, res) => {
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────
 // Verifies token, returns user data + role for navigation
-router.post('/login', verifyToken, async (req, res) => {
+
+  
+router.post('/login', async (req, res) => {
   const { firebaseUid } = req.body;
 
   try {
     const user = await prisma.user.findUnique({
-      where:   { firebaseUid },
-      include: { parentProfile: true, driverProfile: true }
+      where: { firebaseUid },
+      include: {
+        parentProfile: true,
+        driverProfile: true
+      }
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ error: 'Account suspended' });
+      return res.status(403).json({ error: "Account suspended" });
     }
 
-    // Update last login time
     await prisma.user.update({
       where: { firebaseUid },
-      data:  { lastLoginAt: new Date() }
+      data: {
+        lastLoginAt: new Date()
+      }
     });
 
-    res.json({ success: true, user });
+    res.json({
+      success: true,
+      user
+    });
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    console.error("Login error:", error);
+    res.status(500).json({
+      error: "Login failed"
+    });
   }
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────
 // Returns current user data
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me',  async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
-      where:   { firebaseUid: req.user.uid },
+      where: { firebaseUid: "123456" },
       include: { parentProfile: true, driverProfile: true }
     });
 

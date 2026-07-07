@@ -8,6 +8,8 @@ import {
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
+const API = 'http://10.0.0.132:3000';
+
 export default function LoginScreen({ navigation }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -20,8 +22,38 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigation.replace('Home');
+      // Step 1 — Sign in with Firebase
+      const cred  = await signInWithEmailAndPassword(auth, email, password);
+      const token = await cred.user.getIdToken();
+
+      // Step 2 — Get user data and role from backend
+      const response = await fetch(`${API}/api/auth/login`, {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firebaseUid: cred.user.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Step 3 — Navigate based on role
+        const role = data.user.role;
+        if (role === 'PARENT') {
+          navigation.replace('Home');
+        } else if (role === 'DRIVER') {
+          navigation.replace('DriverHome');
+        } else if (role === 'ADMIN') {
+          navigation.replace('AdminHome');
+        }
+      } else {
+        Alert.alert('Login Failed', data.error || 'Please try again.');
+      }
+
     } catch (error) {
       let message = 'Something went wrong. Please try again.';
       if (error.code === 'auth/user-not-found')
@@ -32,6 +64,8 @@ export default function LoginScreen({ navigation }) {
         message = 'Please enter a valid email address.';
       if (error.code === 'auth/too-many-requests')
         message = 'Too many attempts. Please try again later.';
+      if (error.code === 'auth/invalid-credential')
+        message = 'Incorrect email or password.';
       Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);
@@ -39,10 +73,9 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+
       <Text style={styles.logo}>SchoolRide</Text>
       <Text style={styles.tagline}>Welcome back</Text>
 
@@ -70,16 +103,14 @@ export default function LoginScreen({ navigation }) {
 
       <TouchableOpacity
         onPress={() => navigation.navigate('ForgotPassword')}
-        style={styles.forgotContainer}
-      >
+        style={styles.forgotContainer}>
         <Text style={styles.forgotText}>Forgot your password?</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.btn, loading && styles.btnDisabled]}
         onPress={handleLogin}
-        disabled={loading}
-      >
+        disabled={loading}>
         {loading
           ? <ActivityIndicator color='white' />
           : <Text style={styles.btnText}>Sign In</Text>
@@ -88,33 +119,35 @@ export default function LoginScreen({ navigation }) {
 
       <TouchableOpacity
         onPress={() => navigation.navigate('Register')}
-        style={styles.registerContainer}
-      >
+        style={styles.registerContainer}>
         <Text style={styles.registerText}>
           Don't have an account?{' '}
           <Text style={styles.registerLink}>Sign Up</Text>
         </Text>
       </TouchableOpacity>
+
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container:         { flex:1, backgroundColor:'#0a1628',
-                       justifyContent:'center', padding:24 },
-  logo:              { fontSize:36, fontWeight:'bold', color:'#F5A623', marginBottom:4 },
-  tagline:           { fontSize:15, color:'#94a3b8', marginBottom:32 },
-  label:             { fontSize:13, color:'#94a3b8', marginBottom:6, fontWeight:'600' },
-  input:             { backgroundColor:'#0d2137', color:'white', padding:14,
-                       borderRadius:10, marginBottom:16, fontSize:15,
-                       borderWidth:1, borderColor:'#1e3a5f' },
-  forgotContainer:   { alignItems:'flex-end', marginBottom:24 },
-  forgotText:        { color:'#F5A623', fontSize:13 },
-  btn:               { backgroundColor:'#27ae60', padding:16,
-                       borderRadius:12, alignItems:'center', marginBottom:20 },
-  btnDisabled:       { backgroundColor:'#1a6b3a' },
-  btnText:           { color:'white', fontSize:17, fontWeight:'bold' },
-  registerContainer: { alignItems:'center' },
-  registerText:      { color:'#94a3b8', fontSize:13 },
-  registerLink:      { color:'#F5A623', fontWeight:'bold' },
+  container:         { flex: 1, backgroundColor: '#0a1628',
+                       justifyContent: 'center', padding: 24 },
+  logo:              { fontSize: 36, fontWeight: 'bold',
+                       color: '#F5A623', marginBottom: 4 },
+  tagline:           { fontSize: 15, color: '#94a3b8', marginBottom: 32 },
+  label:             { fontSize: 13, color: '#94a3b8',
+                       marginBottom: 6, fontWeight: '600' },
+  input:             { backgroundColor: '#0d2137', color: 'white', padding: 14,
+                       borderRadius: 10, marginBottom: 16, fontSize: 15,
+                       borderWidth: 1, borderColor: '#1e3a5f' },
+  forgotContainer:   { alignItems: 'flex-end', marginBottom: 24 },
+  forgotText:        { color: '#F5A623', fontSize: 13 },
+  btn:               { backgroundColor: '#27ae60', padding: 16,
+                       borderRadius: 12, alignItems: 'center', marginBottom: 20 },
+  btnDisabled:       { backgroundColor: '#1a6b3a' },
+  btnText:           { color: 'white', fontSize: 17, fontWeight: 'bold' },
+  registerContainer: { alignItems: 'center' },
+  registerText:      { color: '#94a3b8', fontSize: 13 },
+  registerLink:      { color: '#F5A623', fontWeight: 'bold' },
 });
