@@ -1,4 +1,19 @@
+# Node
 node_modules
+
+# Environment
 .env
+
+# Firebase service account keys
 firebase-key.json
-/generated/prismafirebase-key.json.json 
+firebase-key.json.json
+
+# Prisma generated client
+/generated
+
+# Flutter
+**/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
