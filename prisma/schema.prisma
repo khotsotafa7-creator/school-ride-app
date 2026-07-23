@@ -240,7 +240,7 @@ model School {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  children Child[]
+ 
 
   @@unique([name, address])
   @@index([city])
@@ -255,8 +255,12 @@ model Child {
   id                String        @id @default(cuid())
   parentProfileId   String
   parent            ParentProfile @relation(fields: [parentProfileId], references: [id], onDelete: Restrict)
-  schoolId          String
-  school            School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  schoolName        String
+schoolAddress     String
+schoolSuburb      String
+schoolCity        String
+schoolProvince    String
+postalCode        String
   fullName          String
   grade             String
   dateOfBirth       DateTime?
@@ -274,7 +278,7 @@ model Child {
   notifications Notification[] @relation("ChildNotifications")
 
   @@index([parentProfileId])
-  @@index([schoolId])
+ 
   @@index([isActive])
 }
 
